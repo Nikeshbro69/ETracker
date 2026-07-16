@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  full_name      String    @db.VarChar(255)
+  email          String    @unique @db.VarChar(255)
+  password       String
+  oauth_provider String?   @db.VarChar(100)
+  oauth_id       String?   @db.VarChar(255)
+  is_active      Boolean   @default(true)
+  created_at     DateTime  @default(now()) @db.Timestamptz
+  updated_at     DateTime  @updatedAt @db.Timestamptz
+  deleted_at     DateTime? @db.Timestamptz
+
+  // Relations
+  userRoles       UserRole[]
+  incomeRecords   Income[]         @relation("IncomeCreatedBy")
+  incomeUpdated   Income[]         @relation("IncomeUpdatedBy")
+  expenseRecords  Expense[]        @relation("ExpenseCreatedBy")
+  expenseUpdated  Expense[]        @relation("ExpenseUpdatedBy")
+  notes           Note[]
+  reminders       Reminder[]
+  attachments     Attachment[]
+  auditLogs       AuditLog[]
+  refreshTokens   RefreshToken[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique @db.VarChar(100)
+  description String?   @db.VarChar(255)
+  created_at  DateTime  @default(now()) @db.Timestamptz
+
+  // Relations
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  role_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, role_id])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  token      String   @unique
+  expires_at DateTime @db.Timestamptz
+  created_at DateTime @default(now()) @db.Timestamptz
+  revoked    Boolean  @default(false)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model IncomeCategory {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique @db.VarChar(255)
+  description String?   @db.Text
+  is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now()) @db.Timestamptz
+  updated_at  DateTime  @updatedAt @db.Timestamptz
+  deleted_at  DateTime? @db.Timestamptz
+
+  incomes Income[]
+
+  @@map("income_categories")
+}
+
+model ExpenseCategory {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique @db.VarChar(255)
+  description String?   @db.Text
+  group_name  String?   @db.VarChar(100)
+  is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now()) @db.Timestamptz
+  updated_at  DateTime  @updatedAt @db.Timestamptz
+  deleted_at  DateTime? @db.Timestamptz
+
+  expenses Expense[]
+
+  @@map("expense_categories")
+}
+
+model Income {
+  id               String    @id @default(uuid()) @db.Uuid
+  transaction_date DateTime  @db.Date
+  amount           Decimal   @db.Decimal(15, 2)
+  income_category_id String  @db.Uuid
+  income_source    String?   @db.VarChar(255)
+  client_name      String?   @db.VarChar(255)
+  payment_method   String    @db.VarChar(100)
+  reference_number String?   @db.VarChar(255)
+  invoice_number   String?   @db.VarChar(255)
+  description      String?   @db.Text
+  created_by       String    @db.Uuid
+  updated_by       String?   @db.Uuid
+  created_at       DateTime  @default(now()) @db.Timestamptz
+  updated_at       DateTime  @updatedAt @db.Timestamptz
+  deleted_at       DateTime? @db.Timestamptz
+
+  category    IncomeCategory @relation(fields: [income_category_id], references: [id])
+  creator     User           @relation("IncomeCreatedBy", fields: [created_by], references: [id])
+  updater     User?          @relation("IncomeUpdatedBy", fields: [updated_by], references: [id])
+  attachments Attachment[]
+
+  @@index([transaction_date])
+  @@index([income_category_id])
+  @@index([created_by])
+  @@index([deleted_at])
+  @@index([amount])
+  @@map("income")
+}
+
+model Expense {
+  id                  String    @id @default(uuid()) @db.Uuid
+  expense_date        DateTime  @db.Date
+  amount              Decimal   @db.Decimal(15, 2)
+  expense_category_id String    @db.Uuid
+  vendor_name         String?   @db.VarChar(255)
+  payment_method      String    @db.VarChar(100)
+  bill_number         String?   @db.VarChar(255)
+  description         String?   @db.Text
+  created_by          String    @db.Uuid
+  updated_by          String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  deleted_at          DateTime? @db.Timestamptz
+
+  category    ExpenseCategory @relation(fields: [expense_category_id], references: [id])
+  creator     User            @relation("ExpenseCreatedBy", fields: [created_by], references: [id])
+  updater     User?           @relation("ExpenseUpdatedBy", fields: [updated_by], references: [id])
+  attachments Attachment[]
+
+  @@index([expense_date])
+  @@index([expense_category_id])
+  @@index([created_by])
+  @@index([deleted_at])
+  @@index([amount])
+  @@map("expense")
+}
+
+model Note {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(255)
+  description String    @db.Text
+  color_label String?   @db.VarChar(50)
+  is_pinned   Boolean   @default(false)
+  is_archived Boolean   @default(false)
+  created_by  String    @db.Uuid
+  created_at  DateTime  @default(now()) @db.Timestamptz
+  updated_at  DateTime  @updatedAt @db.Timestamptz
+  deleted_at  DateTime? @db.Timestamptz
+
+  creator User @relation(fields: [created_by], references: [id])
+
+  @@index([created_by])
+  @@index([deleted_at])
+  @@map("notes")
+}
+
+model Reminder {
+  id             String    @id @default(uuid()) @db.Uuid
+  title          String    @db.VarChar(255)
+  description    String?   @db.Text
+  reminder_date  DateTime  @db.Date
+  reminder_time  String?   @db.VarChar(10)
+  priority       String    @default("MEDIUM") @db.VarChar(10)
+  status         String    @default("PENDING") @db.VarChar(20)
+  repeat         String    @default("NONE") @db.VarChar(20)
+  created_by     String    @db.Uuid
+  created_at     DateTime  @default(now()) @db.Timestamptz
+  updated_at     DateTime  @updatedAt @db.Timestamptz
+  deleted_at     DateTime? @db.Timestamptz
+
+  creator     User         @relation(fields: [created_by], references: [id])
+  attachments Attachment[]
+
+  @@index([created_by])
+  @@index([reminder_date])
+  @@index([status])
+  @@index([deleted_at])
+  @@map("reminders")
+}
+
+model Attachment {
+  id          String    @id @default(uuid()) @db.Uuid
+  entity_type String    @db.VarChar(50)
+  entity_id   String    @db.Uuid
+  file_name   String    @db.VarChar(255)
+  file_size   BigInt
+  mime_type   String    @db.VarChar(100)
+  storage_key String    @db.VarChar(500)
+  storage_url String    @db.Text
+  provider    String    @db.VarChar(50)
+  uploaded_by String    @db.Uuid
+  created_at  DateTime  @default(now()) @db.Timestamptz
+  deleted_at  DateTime? @db.Timestamptz
+
+  uploader  User      @relation(fields: [uploaded_by], references: [id])
+  income    Income?   @relation(fields: [entity_id], references: [id], map: "attachment_income_fk")
+  expense   Expense?  @relation(fields: [entity_id], references: [id], map: "attachment_expense_fk")
+  reminder  Reminder? @relation(fields: [entity_id], references: [id], map: "attachment_reminder_fk")
+
+  @@index([entity_type, entity_id])
+  @@index([uploaded_by])
+  @@index([deleted_at])
+  @@map("attachments")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String?  @db.Uuid
+  action      String   @db.VarChar(100)
+  entity_type String?  @db.VarChar(50)
+  entity_id   String?  @db.Uuid
+  old_values  Json?
+  new_values  Json?
+  ip_address  String?  @db.VarChar(45)
+  created_at  DateTime @default(now()) @db.Timestamptz
+
+  user User? @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([created_at])
+  @@index([entity_type, entity_id])
+  @@map("audit_logs")
+}
